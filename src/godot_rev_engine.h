@@ -20,9 +20,9 @@ private:
     double master_gain = 1.0;
 
     void* rev_simulator_ptr = nullptr;
-    int64_t dll_handle = 0;
+    void* dll_handle = nullptr; // Als void* deklariert für die Cross-Plattform-Struktur
 
-    // Explizite Typdefinitionen für die Crankcase-Funktionen
+    // Explizite Typdefinitionen für die Crankcase-Schnittstellen
     typedef void* (*CreateFunc)();
     typedef void (*DestroyFunc)(void*);
     typedef bool (*LoadFunc)(void*, const uint8_t*, uint32_t);
