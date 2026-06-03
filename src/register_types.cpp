@@ -33,19 +33,30 @@ GodotREVEngine::~GodotREVEngine() {
 bool GodotREVEngine::init_rev_library() {
     String path = "res://addons/crankcase/REVRuntime.dll";
     
-    // NATIVE GODOT-BRÜCKE: Lädt die DLL absolut plattformunabhängig über Godots C++ API!
     Error err = OS.get_singleton()->load_dynamic_library(path, dll_handle);
     if (err != OK || dll_handle == 0) {
-        UtilityFunctions::push_error("[REV Engine] REVRuntime.dll konnte nicht über Godot-OS geladen werden!");
+        UtilityFunctions::push_error("[REV Engine] REVRuntime.dll konnte nicht geladen werden!");
         return false;
     }
 
-    // Godots eigener Funktions-Abtaster (Ersetzt das fehlerhafte Windows GetProcAddress)
-    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_CreateSimulator", *(void***)&f_create);
-    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_DestroySimulator", *(void***)&f_destroy);
-    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_LoadModelData", *(void***)&f_load);
-    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_Update", *(void***)&f_update);
-    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_GenerateAudio", *(void***)&f_generate);
+    // Sauberes Laden der Funktionspointer über Godot-C++ konforme Variablen-Referenzen
+    void* p_create = nullptr;
+    void* p_destroy = nullptr;
+    void* p_load = nullptr;
+    void* p_update = nullptr;
+    void* p_generate = nullptr;
+
+    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_CreateSimulator", p_create);
+    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_DestroySimulator", p_destroy);
+    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_LoadModelData", p_load);
+    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_Update", p_update);
+    OS::get_singleton()->get_dynamic_library_symbol_handle(dll_handle, "REV_GenerateAudio", p_generate);
+
+    f_create = (CreateFunc)p_create;
+    f_destroy = (DestroyFunc)p_destroy;
+    f_load = (LoadFunc)p_load;
+    f_update = (UpdateFunc)p_update;
+    f_generate = (GenerateFunc)p_generate;
 
     if (!f_create || !f_destroy || !f_load || !f_update || !f_generate) {
         UtilityFunctions::push_error("[REV Engine] DLL-Symbole unvollständig geladen!");
@@ -81,16 +92,13 @@ void GodotREVEngine::_process(double delta) {
     int frames_available = playback->get_frames_available();
     if (frames_available <= 0) return;
 
-    // Wir erstellen ein einfaches C++ Array im Speicher
-    float* audio_buffer = new float[frames_available * 2];
-    
-    f_generate(rev_simulator_ptr, audio_buffer, frames_available, 2);
+    // Vektor statt nacktem Array nutzen für C++ Standardstabilität im Compiler
+    std::vector<float> audio_buffer(frames_available * 2);
+    f_generate(rev_simulator_ptr, audio_buffer.data(), frames_available, 2);
 
     for (int i = 0; i < frames_available; ++i) {
         float l = audio_buffer[i * 2] * (float)master_gain;
         float r = audio_buffer[i * 2 + 1] * (float)master_gain;
         playback->push_frame(Vector2(l, r));
     }
-
-    delete[] audio_buffer; // Speicher wieder freigeben
 }
