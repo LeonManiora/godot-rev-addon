@@ -6,6 +6,7 @@
 #include <godot_cpp/classes/audio_stream_generator_playback.hpp>
 #include <godot_cpp/classes/audio_stream_generator.hpp>
 #include <godot_cpp/core/class_db.hpp>
+#include <vector>
 
 namespace godot {
 
@@ -18,16 +19,21 @@ private:
     int current_gear = 1;
     double master_gain = 1.0;
 
-    // Pointer auf den Crankcase-Simulator im C++ Speicher
     void* rev_simulator_ptr = nullptr;
     int64_t dll_handle = 0;
 
-    // Die Funktionszeiger deklarieren wir jetzt als generische Funktions-Pointer
-    void* (*f_create)() = nullptr;
-    void (*f_destroy)(void*) = nullptr;
-    bool (*f_load)(void*, const uint8_t*, uint32_t) = nullptr;
-    void (*f_update)(void*, float, float, float, int) = nullptr;
-    void (*f_generate)(void*, float*, uint32_t, uint32_t) = nullptr;
+    // Explizite Typdefinitionen für die Crankcase-Funktionen
+    typedef void* (*CreateFunc)();
+    typedef void (*DestroyFunc)(void*);
+    typedef bool (*LoadFunc)(void*, const uint8_t*, uint32_t);
+    typedef void (*UpdateFunc)(void*, float, float, float, int);
+    typedef void (*GenerateFunc)(void*, float*, uint32_t, uint32_t);
+
+    CreateFunc f_create = nullptr;
+    DestroyFunc f_destroy = nullptr;
+    LoadFunc f_load = nullptr;
+    UpdateFunc f_update = nullptr;
+    GenerateFunc f_generate = nullptr;
 
     AudioStreamPlayer3D* generator_player = nullptr;
     Ref<AudioStreamGeneratorPlayback> playback;
