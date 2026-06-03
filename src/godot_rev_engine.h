@@ -1,0 +1,63 @@
+#ifndef GODOT_REV_ENGINE_H
+#define GODOT_REV_ENGINE_H
+
+#include <godot_cpp/classes/node3d.hpp>
+#include <godot_cpp/classes/audio_stream_player3d.hpp>
+#include <godot_cpp/classes/audio_stream_generator_playback.hpp>
+#include <godot_cpp/classes/audio_stream_generator.hpp>
+#include <godot_cpp/core/class_db.hpp>
+
+// Wir binden die C-Schnittstellen der offiziellen REVRuntime.dll an
+extern "C" {
+    typedef void* (*REV_CreateSimulator)();
+    typedef void (*REV_DestroySimulator)(void* sim);
+    typedef bool (*REV_LoadModelData)(void* sim, const uint8_t* data, uint32_t size);
+    typedef void (*REV_Update)(void* sim, float rpm, float throttle, float velocity, int gear);
+    typedef void (*REV_GenerateAudio)(void* sim, float* buffer, uint32_t frameCount, uint32_t channels);
+}
+
+namespace godot {
+
+class GodotREVEngine : public Node3D {
+    GDCLASS(GodotREVEngine, Node3D);
+
+private:
+    double rpminfluence = 0.0;
+    double throttle_input = 0.0;
+    int current_gear = 1;
+    double master_gain = 1.0;
+
+    void* rev_simulator_ptr = nullptr;
+    void* dll_handle = nullptr;
+
+    REV_CreateSimulator f_create = nullptr;
+    REV_DestroySimulator f_destroy = nullptr;
+    REV_LoadModelData f_load = nullptr;
+    REV_Update f_update = nullptr;
+    REV_GenerateAudio f_generate = nullptr;
+
+    AudioStreamPlayer3D* generator_player = nullptr;
+    Ref<AudioStreamGeneratorPlayback> playback;
+
+protected:
+    static void _bind_methods();
+
+public:
+    GodotREVEngine();
+    ~GodotREVEngine();
+
+    void _process(double delta) override;
+    
+    void set_rpminfluence(double value) { rpminfluence = value; }
+    double get_rpminfluence() const { return rpminfluence; }
+    void set_throttle(double value) { throttle_input = value; }
+    double get_throttle() const { return throttle_input; }
+    
+    bool init_rev_library();
+    bool load_rev_model(const PackedByteArray& model_bytes);
+    void start_audio();
+};
+
+}
+
+#endif
