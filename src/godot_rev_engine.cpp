@@ -1,6 +1,7 @@
 #include "godot_rev_engine.h"
 #include <godot_cpp/variant/utility_functions.hpp>
-#include <windows.h>
+#include <godot_cpp/classes/project_settings.hpp>
+#include <windows.h> // Nutzt die native Windows-API auf dem GitHub-Windows-Server!
 #include <cmath>
 
 using namespace godot;
@@ -22,26 +23,36 @@ void GodotREVEngine::_bind_methods() {
 GodotREVEngine::GodotREVEngine() {}
 
 GodotREVEngine::~GodotREVEngine() {
-    if (rev_simulator_ptr && f_destroy) f_destroy(rev_simulator_ptr);
-    if (dll_handle) FreeLibrary((HMODULE)dll_handle);
+    if (rev_simulator_ptr && f_destroy) {
+        f_destroy(rev_simulator_ptr);
+    }
+    if (dll_handle) {
+        FreeLibrary((HMODULE)dll_handle);
+    }
 }
 
 bool GodotREVEngine::init_rev_library() {
+    // Wandelt den Godot-Pfad res:// in einen absoluten Windows-Pfad um
     String global_dll_path = ProjectSettings::get_singleton()->globalize_path("res://addons/crankcase/REVRuntime.dll");
-    dll_handle = (void*)LoadLibraryW((LPCWSTR)global_dll_path.utf16().get_data());
     
+    // Windows-API Funktion lädt die Crankcase-DLL direkt in den Speicher
+    dll_handle = (void*)LoadLibraryW((LPCWSTR)global_dll_path.utf16().get_data());
     if (!dll_handle) {
         UtilityFunctions::push_error("[REV Engine] REVRuntime.dll wurde im Ordner res://addons/crankcase/ nicht gefunden!");
         return false;
     }
 
-    f_create = (REV_CreateSimulator)GetProcAddress((HMODULE)dll_handle, "REV_CreateSimulator");
-    f_destroy = (REV_DestroySimulator)GetProcAddress((HMODULE)dll_handle, "REV_DestroySimulator");
-    f_load = (REV_LoadModelData)GetProcAddress((HMODULE)dll_handle, "REV_LoadModelData");
-    f_update = (REV_Update)GetProcAddress((HMODULE)dll_handle, "REV_Update");
-    f_generate = (REV_GenerateAudio)GetProcAddress((HMODULE)dll_handle, "REV_GenerateAudio");
+    // Holen der Funktionszeiger mittels Windows GetProcAddress
+    f_create = (CreateFunc)GetProcAddress((HMODULE)dll_handle, "REV_CreateSimulator");
+    f_destroy = (DestroyFunc)GetProcAddress((HMODULE)dll_handle, "REV_DestroySimulator");
+    f_load = (LoadFunc)GetProcAddress((HMODULE)dll_handle, "REV_LoadModelData");
+    f_update = (UpdateFunc)GetProcAddress((HMODULE)dll_handle, "REV_Update");
+    f_generate = (GenerateFunc)GetProcAddress((HMODULE)dll_handle, "REV_GenerateAudio");
 
-    if (!f_create || !f_destroy || !f_load || !f_update || !f_generate) return false;
+    if (!f_create || !f_destroy || !f_load || !f_update || !f_generate) {
+        UtilityFunctions::push_error("[REV Engine] Symbole in der REVRuntime.dll unvollständig!");
+        return false;
+    }
 
     rev_simulator_ptr = f_create();
     return (rev_simulator_ptr != nullptr);
@@ -63,12 +74,10 @@ void GodotREVEngine::start_audio() {
 void GodotREVEngine::_process(double delta) {
     if (playback.is_null() || !rev_simulator_ptr || !f_update || !f_generate) return;
 
-    // Wir simulieren hier ein standardmäßiges Drehzahlband von 800 bis 7500 RPM basierend auf dem Slider
     float real_rpm = lerp(800.0f, 7500.0f, (float)rpminfluence);
     float real_throttle = (float)throttle_input;
     float fake_velocity = real_rpm * 0.02f;
 
-    // Der offizielle, partial-ladende Core-Update von Crankcase Audio!
     f_update(rev_simulator_ptr, real_rpm, real_throttle, fake_velocity, current_gear);
 
     int frames_available = playback->get_frames_available();
