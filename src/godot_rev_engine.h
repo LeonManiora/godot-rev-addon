@@ -7,15 +7,6 @@
 #include <godot_cpp/classes/audio_stream_generator.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
-// Wir binden die C-Schnittstellen der offiziellen REVRuntime.dll an
-extern "C" {
-    typedef void* (*REV_CreateSimulator)();
-    typedef void (*REV_DestroySimulator)(void* sim);
-    typedef bool (*REV_LoadModelData)(void* sim, const uint8_t* data, uint32_t size);
-    typedef void (*REV_Update)(void* sim, float rpm, float throttle, float velocity, int gear);
-    typedef void (*REV_GenerateAudio)(void* sim, float* buffer, uint32_t frameCount, uint32_t channels);
-}
-
 namespace godot {
 
 class GodotREVEngine : public Node3D {
@@ -27,14 +18,16 @@ private:
     int current_gear = 1;
     double master_gain = 1.0;
 
+    // Pointer auf den Crankcase-Simulator im C++ Speicher
     void* rev_simulator_ptr = nullptr;
-    void* dll_handle = nullptr;
+    int64_t dll_handle = 0;
 
-    REV_CreateSimulator f_create = nullptr;
-    REV_DestroySimulator f_destroy = nullptr;
-    REV_LoadModelData f_load = nullptr;
-    REV_Update f_update = nullptr;
-    REV_GenerateAudio f_generate = nullptr;
+    // Die Funktionszeiger deklarieren wir jetzt als generische Funktions-Pointer
+    void* (*f_create)() = nullptr;
+    void (*f_destroy)(void*) = nullptr;
+    bool (*f_load)(void*, const uint8_t*, uint32_t) = nullptr;
+    void (*f_update)(void*, float, float, float, int) = nullptr;
+    void (*f_generate)(void*, float*, uint32_t, uint32_t) = nullptr;
 
     AudioStreamPlayer3D* generator_player = nullptr;
     Ref<AudioStreamGeneratorPlayback> playback;
