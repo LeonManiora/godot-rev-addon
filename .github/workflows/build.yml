@@ -8,9 +8,15 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
+
+      - name: Download Godot-CPP Bindings (Direct Override)
+        shell: bash
+        run: |
+          # Wir laden die offiziellen Godot 4.5 C++ Bindings direkt als stabiles ZIP herunter
+          curl -L -o godot-cpp.zip https://github.com
+          unzip godot-cpp.zip
+          # Wir benennen den entpackten Ordner exakt so um, wie deine SConstruct es erwartet
+          mv godot-cpp-master godot-cpp
 
       - name: Set up Python
         uses: actions/setup-python@v5
